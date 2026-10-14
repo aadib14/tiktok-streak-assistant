@@ -1,0 +1,16 @@
+.profile/
+node_modules/
+.env
+.env.*
+!.env.example
+activity.log
+playwright-report/
+test-results/
+.profile/
+node_modules/
+.env
+.env.*
+!.env.example
+activity.log
+playwright-report/
+test-results/
