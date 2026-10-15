@@ -281,21 +281,20 @@ async function openFriendChat(friendName) {
       timeout: 60000,
     });
 
-      await page.waitForTimeout(3000);
+    await page.waitForTimeout(3000);
 
-      console.log("URL saat ini:", page.url());
-      console.log("Judul halaman:", await page.title());
-
-      const bodyText = await page.locator("body").innerText();
-      console.log("Nama ines muncul di halaman:", bodyText.toLowerCase().includes(friendName.toLowerCase()));
-
-      const escapedName = friendName.replace(
+    const escapedName = friendName.replace(
       /[.*+?^${}()|[\]\\]/g,
       "\\$&"
     );
 
     const nickname = page.locator("span").filter({
       hasText: new RegExp(`^${escapedName}$`, "i"),
+    });
+
+    await nickname.first().waitFor({
+      state: "visible",
+      timeout: 10000,
     });
 
     const count = await nickname.count();
@@ -310,82 +309,69 @@ async function openFriendChat(friendName) {
     await nickname.click();
     await page.waitForTimeout(2000);
 
-    const editor = page.getByRole("textbox", {
-      name: "Send a message...",
-    });
 
-    await editor.fill("TEST BOT - tidak dikirim");
+    const editor = page.locator(
+      '[data-e2e="dm-new-input-editor"] [contenteditable="true"]'
+    );
 
-    const editorInfo = await editor.evaluate((el) => {
-      const parent = el.closest('[class*="DivChatBottom"]');
+    try {
+      await editor.first().waitFor({
+        state: "visible",
+        timeout: 15000,
+      });
+    } catch {
+      console.log(`Editor chat "${friendName}" tidak ditemukan.`);
+      console.log("URL saat ini:", page.url());
+      console.log(
+        "Jumlah editor yang ditemukan:",
+        await editor.count()
+      );
+      return;
+    }
 
-      return {
-        editorTag: el.tagName,
-        editorRole: el.getAttribute("role"),
-        editorLabel: el.getAttribute("aria-label"),
-        editorClass: el.className,
-        parentHTML: parent ? parent.outerHTML.slice(0, 12000) : "Area chat tidak ditemukan",
-      };
-    });
-
-    console.log("\n=== STRUKTUR AREA PESAN ===");
-    console.log(JSON.stringify(editorInfo, null, 2));
-
-    // Kosongkan kembali; jangan klik tombol apa pun.
-    await editor.fill("");
-
-    if (await editor.count() === 1 && await editor.isVisible()) {
+    
       console.log(`Berhasil membuka chat "${friendName}".`);
       console.log("Editor pesan terdeteksi.");
 
-      if (await editor.count() === 1 && await editor.isVisible()) {
-        console.log(`Berhasil membuka chat "${friendName}".`);
-        console.log("Editor pesan terdeteksi.");
-
-        const sendButton = page.locator('[data-e2e="dm-new-send-btn"]');
-        console.log("Jumlah tombol Send:", await sendButton.count());
-        console.log("Tombol terlihat:", await sendButton.isVisible());
-
-        // kode lama di bawahnya tetap biarkan
-      const buttons = await page.locator("button").evaluateAll((elements) =>
-        elements.map((button, index) => ({
-          index,
-          text: button.innerText.trim(),
-          ariaLabel: button.getAttribute("aria-label"),
-          dataE2e: button.getAttribute("data-e2e"),
-          disabled: button.disabled,
-        }))
-      );
-
-      console.log("\n=== PEMERIKSAAN TOMBOL ===");
-
-      for (const button of buttons) {
-        console.log(JSON.stringify(button));
-      }
-
-      console.log("\nPemeriksaan selesai. Tidak ada tombol yang diklik.");
-
-
-      // Isi kolom pesan, tetapi jangan kirim.
+      // Tes mengetik tanpa mengirim pesan.
       await editor.fill(config.message);
 
-     const typedMessage = await editor.innerText();
+      const sendButton = page.locator(
+        '[data-e2e="dm-new-send-btn"]'
+      );
 
-   
-if (typedMessage.trim() === config.message.trim()) {
-  console.log("Pesan berhasil dimasukkan ke kolom chat.");
-  console.log(`Isi pesan: ${typedMessage}`);
-  console.log("Pesan BELUM dikirim.");
-} else {
-  console.log("Isi kolom belum cocok dengan pesan konfigurasi.");
+      console.log("Jumlah tombol Send setelah mengetik:", await sendButton.count());
+      console.log(
+        "Tombol Send terlihat:",
+        await sendButton.isVisible().catch(() => false)
+      );
+
+    const typedMessageAfterTyping = (await editor.innerText()).trim();
+
+    console.log("Pesan konfigurasi:", JSON.stringify(config.message.trim()));
+    console.log("Isi editor terbaca:", JSON.stringify(typedMessageAfterTyping));
+
+    if (typedMessageAfterTyping === config.message.trim()) {
+      console.log("Pesan cocok dengan konfigurasi.");
+      console.log("Pesan BELUM dikirim.");
+    } else {
+      console.log("Isi kolom belum cocok dengan pesan konfigurasi.");
 }
 
-// Kosongkan kembali kolom setelah tes.
-await editor.fill("");
-console.log("Kolom pesan sudah dikosongkan kembali.");
-} else {
-  console.log("Chat diklik, tetapi editor belum terverifikasi.");
-}
+      // Kosongkan kolom agar tidak meninggalkan teks tes.
+      await editor.fill("");
+
+
+          const typedMessage = await editor.innerText();
+
+          if (typedMessage.trim() === config.message.trim()) {
+            console.log("Pesan berhasil dimasukkan ke kolom chat.");
+            console.log("Pesan BELUM dikirim.");
+          }
+
+          // Kosongkan kolom agar tidak meninggalkan teks tes.
+          await editor.fill("");
+
   } catch (error) {
     console.error("Gagal membuka chat:", error.message);
   } finally {
@@ -395,28 +381,38 @@ console.log("Kolom pesan sudah dikosongkan kembali.");
   }
 }
 
-async function processAllFriends() {
+
+async function processAllFriends(scheduled = false) {
   if (!config.enabled) {
     console.log("\nBot sedang dinonaktifkan.");
     return;
   }
 
-  if (config.friends.length === 0) {
+  if (!config.friends.length) {
     console.log("\nDaftar teman masih kosong.");
     return;
   }
 
-  console.log(`\nAkan memproses ${config.friends.length} teman.`);
+  // Hindari memproses nama yang sama dua kali dalam satu sesi.
+  const friends = [...new Set(
+    config.friends.map((name) => name.trim()).filter(Boolean)
+  )];
+
+  console.log(`\nAkan memproses ${friends.length} teman.`);
   console.log("Pesan:", config.message);
 
+if (!scheduled) {
   const confirm = (
-    await ask("\nMulai proses? Ketik y untuk lanjut: ")
+    await ask("\nMulai pengiriman otomatis? (y/n): ")
   ).trim().toLowerCase();
 
   if (confirm !== "y") {
     console.log("Proses dibatalkan.");
     return;
   }
+} else {
+  console.log("Mode terjadwal aktif. Memulai pengiriman otomatis.");
+}
 
   let context;
 
@@ -427,9 +423,9 @@ async function processAllFriends() {
     });
 
     const page = context.pages()[0];
-
-    for (const friend of config.friends) {
-      console.log(`\nMemproses: ${friend}`);
+    for (const friend of friends) {
+     console.log(`\nMemproses: ${friend}`);
+     await prepareMessage(friend);
 
       try {
         await page.goto("https://www.tiktok.com/messages", {
@@ -437,7 +433,6 @@ async function processAllFriends() {
           timeout: 60000,
         });
 
-        
         await page.waitForTimeout(2500);
 
         const escapedName = friend.replace(
@@ -449,17 +444,12 @@ async function processAllFriends() {
           hasText: new RegExp(`^${escapedName}$`, "i"),
         });
 
-        // Tunggu hingga nama teman muncul, maksimal 10 detik.
-        try {
-          await nickname.first().waitFor({
-            state: "visible",
-            timeout: 10000,
-          });
-        } catch {
-          console.log("Nama teman belum muncul setelah menunggu 10 detik.");
-        }
+        await nickname.first().waitFor({
+          state: "visible",
+          timeout: 10000,
+        });
 
-        const count = await nickname.count();   
+        const count = await nickname.count();
 
         if (count !== 1) {
           console.log(
@@ -471,15 +461,17 @@ async function processAllFriends() {
         await nickname.click();
         await page.waitForTimeout(1500);
 
-        const editor = page.getByRole("textbox", {
-          name: "Send a message...",
+        const editor = page.locator(
+          '[data-e2e="dm-new-input-editor"] [contenteditable="true"]'
+        );
+
+        await editor.first().waitFor({
+          state: "visible",
+          timeout: 15000,
         });
 
-        if (
-          await editor.count() !== 1 ||
-          !(await editor.isVisible())
-        ) {
-          console.log("Dilewati: kolom pesan tidak ditemukan.");
+        if (await editor.count() !== 1) {
+          console.log("Dilewati: kolom pesan tidak ditemukan secara unik.");
           continue;
         }
 
@@ -493,42 +485,63 @@ async function processAllFriends() {
           continue;
         }
 
-        console.log(`Chat: ${friend}`);
-        console.log(`Pesan siap: ${typedMessage}`);
+        // Cari tombol setelah teks dimasukkan.
+        const sendButton = page.locator(
+          '[data-e2e="dm-new-send-btn"]'
+        );
 
-        const approval = (
-          await ask("Kirim pesan ini? (y/n): ")
-        ).trim().toLowerCase();
+        await sendButton.waitFor({
+          state: "visible",
+          timeout: 10000,
+        });
 
+        // Validasi ulang tepat sebelum mengirim.
+        const currentMessage = (await editor.innerText()).trim();
 
-        if (approval === "y") {
-          // Periksa ulang isi kolom sebelum melanjutkan.
-          const currentMessage = (await editor.innerText()).trim();
-
-          if (currentMessage !== config.message.trim()) {
-            console.log("Isi pesan berubah. Pesan tidak dikirim.");
-            await editor.fill("");
-            continue;
-          }
-
-          console.log("Konfirmasi diterima.");
-          console.log(
-            "Pengiriman belum dilakukan oleh versi ini."
-          );
-        } else {
-          console.log("Pesan dilewati.");
+        if (currentMessage !== config.message.trim()) {
+          await editor.fill("");
+          console.log("Dilewati: isi pesan berubah.");
+          continue;
         }
 
-        await editor.fill("");
+        await sendButton.click();
+        await page.waitForTimeout(1500);
 
+        // Indikator awal bahwa kolom sudah kosong setelah pengiriman.
+        const remainingText = (await editor.innerText()).trim();
+
+          if (remainingText === "") {
+            const status =
+              `Indikasi pengiriman berhasil: ${friend}`;
+
+            console.log(status);
+
+            fs.appendFileSync(
+              "./activity.log",
+              `${new Date().toLocaleString("id-ID")} | ${status}\n`,
+              "utf8"
+            );
+          } else {
+          const status =
+            `Status pengiriman belum bisa dipastikan: ${friend}`;
+
+          console.log(status);
+
+          fs.appendFileSync(
+            "./activity.log",
+            `${new Date().toLocaleString("id-ID")} | ${status}\n`,
+            "utf8"
+          );
+        }
       } catch (error) {
         console.log(`Gagal memproses ${friend}: ${error.message}`);
       }
 
-      await wait(1500);
+      // Jeda antarchat.
+      await wait(2500);
     }
 
-    console.log("\nSelesai memeriksa daftar teman.");
+    console.log("\nSelesai memproses daftar teman.");
   } catch (error) {
     console.error("\nProses gagal:", error.message);
   } finally {
@@ -602,4 +615,25 @@ async function main() {
   rl.close();
 }
 
-main();
+
+async function startApp() {
+  const scheduled = process.argv.includes("--scheduled");
+
+  try {
+    if (scheduled) {
+      console.log("=== TikTok Streak Assistant: Mode Terjadwal ===");
+      await processAllFriends(true);
+    } else {
+      await main();
+    }
+  } catch (error) {
+    console.error("Program gagal:", error.message);
+    process.exitCode = 1;
+  } finally {
+    if (scheduled) {
+      rl.close();
+    }
+  }
+}
+
+startApp();
