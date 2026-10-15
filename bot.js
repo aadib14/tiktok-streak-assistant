@@ -3,60 +3,12 @@ const { chromium } = require("playwright");
 const fs = require("node:fs");
 const readline = require("node:readline");
 
-const config = require("./config.json");
+const {
+  loadConfig,
+  saveConfig: saveConfigFile,
+} = require("./src/config");
 
-function validateConfig() {
-  const errors = [];
-
-  if (typeof config.enabled !== "boolean") {
-    errors.push('"enabled" harus bernilai true atau false.');
-  }
-
-  if (
-    typeof config.message !== "string" ||
-    config.message.trim() === ""
-  ) {
-    errors.push('"message" tidak boleh kosong.');
-  }
-
-  if (!Array.isArray(config.friends)) {
-    errors.push('"friends" harus berupa daftar nama.');
-  } else {
-    if (
-      config.friends.some(
-        (friend) =>
-          typeof friend !== "string" ||
-          friend.trim() === ""
-      )
-    ) {
-      errors.push("Daftar teman mengandung nama yang tidak valid.");
-    }
-
-    const names = config.friends.map((friend) =>
-      typeof friend === "string"
-        ? friend.trim().toLowerCase()
-        : ""
-    );
-
-    if (new Set(names).size !== names.length) {
-      errors.push("Daftar teman mengandung nama duplikat.");
-    }
-  }
-
-  if (errors.length > 0) {
-    console.error("\nKonfigurasi tidak valid:");
-
-    for (const error of errors) {
-      console.error(`- ${error}`);
-    }
-
-    process.exit(1);
-  }
-
-  console.log("Konfigurasi berhasil diperiksa.");
-}
-
-validateConfig();
+const config = loadConfig();
 
 const rl = readline.createInterface({
   input: process.stdin,
@@ -74,11 +26,7 @@ function wait(ms) {
 }
 
 function saveConfig() {
-  fs.writeFileSync(
-    "./config.json",
-    JSON.stringify(config, null, 2) + "\n",
-    "utf8"
-  );
+  saveConfigFile(config);
 }
 
 async function prepareMessage(friend) {

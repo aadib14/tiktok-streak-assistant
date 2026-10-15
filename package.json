@@ -1,12 +1,18 @@
+
 {
-  "name": "tiktok-streak-assinstant",
+  "name": "tiktok-streak-assistant",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "TikTok streak assistant using Node.js and Playwright",
+  "main": "bot.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node bot.js",
+    "start:scheduled": "node bot.js --scheduled"
   },
-  "keywords": [],
+  "keywords": [
+    "tiktok",
+    "playwright",
+    "automation"
+  ],
   "author": "",
   "license": "ISC",
   "type": "commonjs",

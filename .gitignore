@@ -1,16 +1,22 @@
-.profile/
+
+# Dependencies
 node_modules/
+
+# Browser session and secrets
+.profile/
 .env
 .env.*
 !.env.example
+
+# Logs
 activity.log
+data/*.log
+
+# Test output
 playwright-report/
 test-results/
-.profile/
-node_modules/
-.env
-.env.*
-!.env.example
-activity.log
-playwright-report/
-test-results/
+
+# Local configuration backup
+/config.json
+/config.backup.json
+config/config.json
